@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rhodes Island Logistics — Dokumentasi</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem; color: #222; font: 1rem/1.6 system-ui, sans-serif; }
+    h1, h2 { line-height: 1.25; }
+    section { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd; }
+    code, pre { font-family: ui-monospace, Consolas, monospace; }
+    code { background: #f4f4f4; padding: .1em .25em; overflow-wrap: anywhere; }
+    pre { padding: 1rem; background: #f6f6f6; border: 1px solid #ddd; overflow-x: auto; }
+    a { color: #0645ad; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Rhodes Island Logistics</h1>
+    <p>Dokumentasi arsitektur server, alur dispatch, dan panduan Rust.</p>
+  </header>
+  <main>
+    <section>
+      <h2>Arsitektur use case</h2>
+      <p>Use case <code>Dispatch Operator</code> menerima permintaan melalui adapter/controller inbound, menjalankan aturan bisnis di service, lalu memakai port outbound untuk mengakses data.</p>
+      <pre>View (DispatcherPage)
+  → Tauri Controller (adapter inbound)
+  → ApiClient / HTTP
+  → Axum Adapter → ServiceTrait (port inbound)
+  → Service / Use Case
+  → RepositoryTrait (port outbound)
+  → Repository (adapter outbound) → Database</pre>
+    </section>
+    <section>
+      <h2>Komponen diagram</h2>
+      <ul>
+        <li><strong>Views:</strong> halaman frontend seperti <code>DispatcherPage</code> dan <code>CourierPage</code>.</li>
+        <li><strong>Controller:</strong> controller desktop menerima perintah UI dan meneruskan request ke API.</li>
+        <li><strong>Inbound port:</strong> <code>ServiceTrait</code> mendefinisikan kontrak use case.</li>
+        <li><strong>Outbound port:</strong> <code>RepositoryTrait</code> mendefinisikan operasi data yang dibutuhkan use case.</li>
+        <li><strong>Entity:</strong> record data seperti <code>Operator</code> dan <code>OrderItem</code>; entity tidak perlu memiliki method bisnis.</li>
+        <li><strong>Data access:</strong> repository mengimplementasikan seluruh method data access dan berkomunikasi dengan database.</li>
+      </ul>
+      <p>DTO adalah bentuk request/response lintas batas layer; entity merepresentasikan data persistence. Adapter menerjemahkan protokol dan model yang digunakan tiap batas.</p>
+    </section>
+    <section>
+      <h2>Alur dispatch</h2>
+      <ol>
+        <li>View memilih courier dan order item, lalu memanggil command Tauri.</li>
+        <li>Controller memvalidasi ID dan ApiClient mengirim HTTP POST.</li>
+        <li>Axum mengurai DTO request dan memanggil <code>ServiceTrait::dispatch_operator()</code>.</li>
+        <li>Service mengambil operator dan order item melalui repository, kemudian memeriksa availability, role, dan status.</li>
+        <li>Repository menjalankan transaksi untuk memperbarui operator serta order item, lalu commit.</li>
+        <li>Hasil dikembalikan ke view agar UI dapat menampilkan status dan memperbarui data.</li>
+      </ol>
+      <pre>DispatcherPage → DispatcherController::dispatch_operator()
+→ ApiClient::dispatch_operator() → Axum handler
+→ ServiceTrait::dispatch_operator() → Service::dispatch_operator()
+→ RepositoryTrait::find_operator() + get_order_item()
+→ RepositoryTrait::dispatch_operator() → transaction / commit
+→ response kembali ke DispatcherPage</pre>
+    </section>
+    <section>
+      <h2>Diagram aktivitas ringkas</h2>
+      <pre>Mulai → pilih courier/order → validasi ID
+  → request HTTP → validasi business rules
+  → [tidak valid: kembalikan error]
+  → [valid: update operator + order item dalam transaksi]
+  → commit → kembalikan sukses → refresh view → selesai</pre>
+    </section>
+  </main>
+</body>
+</html>
